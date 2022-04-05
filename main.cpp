@@ -38,10 +38,26 @@ void DePacMLIL(Ref<AnalysisContext> analysisContext)
 
             std::string intrinsic = arch->GetIntrinsicName(insn.GetIntrinsic());
 
-            if (pac_instructions.find(intrinsic) != pac_instructions.end()) {
-                insn.Replace(function->Nop());
-                updated = true;
+            if (pac_instructions.find(intrinsic) == pac_instructions.end())
+                continue;
+
+            auto outputs = insn.GetOutputVariables();
+            if (outputs.size() < 1) {
+                LogError("0x%llx: Intrinsic %s did not have enough outputs", insn.address, intrinsic.c_str());
+                continue;
             }
+            Variable dest = outputs[0];
+
+            auto params = insn.GetParameterExprs();
+            if (params.size() < 1) {
+                LogError("0x%llx: Intrinsic %s did not have enough params", insn.address, intrinsic.c_str());
+                continue;
+            }
+            MediumLevelILInstruction src = params[0];
+
+            LogInfo("0x%llx: Replacing intrinsic %s", insn.address, intrinsic.c_str());
+            insn.Replace(function->SetVar(8, dest, src.CopyTo(function)));
+            updated = true;
         }
     }
 
@@ -98,7 +114,7 @@ BINARYNINJAPLUGIN bool CorePluginInit()
 			"capabilities": []
 		})#");
 
-    BinaryNinja::LogInfo("DePac loaded successfully (%s-%s/%s)",
+    LogInfo("DePac loaded successfully (%s-%s/%s)",
         GitBranch, GitCommit, BuildType);
 
     return true;
