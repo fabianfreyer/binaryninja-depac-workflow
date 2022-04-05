@@ -79,6 +79,9 @@ BINARYNINJAPLUGIN bool CorePluginInit()
     pac_instructions.insert("__autibz");
     pac_instructions.insert("__autdb");
     pac_instructions.insert("__autdzb");
+    pac_instructions.insert("__xpaci");
+    pac_instructions.insert("__xpacd");
+    pac_instructions.insert("__xpaclri");
 
     Ref<Workflow> myWorkflow = Workflow::Instance()->Clone("DePacWorkflow");
 
