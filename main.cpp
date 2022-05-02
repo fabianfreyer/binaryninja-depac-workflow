@@ -12,17 +12,22 @@ std::set<std::string> pac_instructions;
 
 void DePacMLIL(Ref<AnalysisContext> analysisContext)
 {
-    Ref<MediumLevelILFunction> function = analysisContext->GetMediumLevelILFunction();
+    Ref<MediumLevelILFunction> mlil = analysisContext->GetMediumLevelILFunction();
+
+    if (!mlil)
+        return;
+
+    Ref<Function> function = mlil->GetFunction();
 
     if (!function)
         return;
 
     Ref<BinaryView> bv = analysisContext->GetFunction()->GetView();
 
-    if (!function)
+    if (!bv)
         return;
 
-    Ref<Architecture> arch = function->GetArchitecture();
+    Ref<Architecture> arch = mlil->GetArchitecture();
 
     if (!arch)
         return;
@@ -30,9 +35,9 @@ void DePacMLIL(Ref<AnalysisContext> analysisContext)
     bool updated = false;
 
     // Loop over each instruction.
-    for (auto& bb : function->GetBasicBlocks()) {
+    for (auto& bb : mlil->GetBasicBlocks()) {
         for (size_t instrIndex = bb->GetStart(); instrIndex < bb->GetEnd(); instrIndex++) {
-            MediumLevelILInstruction insn = function->GetInstruction(instrIndex);
+            auto insn = mlil->GetInstruction(instrIndex);
             if (insn.operation != MLIL_INTRINSIC)
                 continue;
 
@@ -53,16 +58,24 @@ void DePacMLIL(Ref<AnalysisContext> analysisContext)
                 LogError("0x%llx: Intrinsic %s did not have enough params", insn.address, intrinsic.c_str());
                 continue;
             }
-            MediumLevelILInstruction src = params[0];
+            auto src = params[0];
 
             LogInfo("0x%llx: Replacing intrinsic %s", insn.address, intrinsic.c_str());
-            insn.Replace(function->SetVar(8, dest, src.CopyTo(function)));
+            insn.Replace(mlil->SetVar(8, dest, src.CopyTo(mlil)));
+
+            // Apply the type if possible.
+            try {
+                auto src_var = src.GetSourceVariable<MLIL_VAR>();
+                function->CreateUserVariable(dest, function->GetVariableType(src_var), function->GetVariableName(src_var));
+            }
+            catch(...) {}
+
             updated = true;
         }
     }
 
     if (updated)
-        function->GenerateSSAForm();
+        mlil->GenerateSSAForm();
 }
 
 BINARYNINJAPLUGIN bool CorePluginInit()
