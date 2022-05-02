@@ -14,23 +14,31 @@ void DePacMLIL(Ref<AnalysisContext> analysisContext)
 {
     Ref<MediumLevelILFunction> mlil = analysisContext->GetMediumLevelILFunction();
 
-    if (!mlil)
+    if (!mlil) {
+        LogError("Could not get mlil function.");
         return;
+    }
 
     Ref<Function> function = mlil->GetFunction();
 
-    if (!function)
+    if (!function) {
+        LogError("Could not get core function for mlil function at 0x%llx", mlil->GetCurrentAddress());
         return;
+    }
 
     Ref<BinaryView> bv = analysisContext->GetFunction()->GetView();
 
-    if (!bv)
+    if (!bv) {
+        LogError("Could not get binary view for mlil function at 0x%llx", mlil->GetCurrentAddress());
         return;
+    }
 
     Ref<Architecture> arch = mlil->GetArchitecture();
 
-    if (!arch)
+    if (!arch) {
+        LogError("Could not get arch for mlil function at 0x%llx", mlil->GetCurrentAddress());
         return;
+    }
 
     bool updated = false;
 
@@ -68,7 +76,9 @@ void DePacMLIL(Ref<AnalysisContext> analysisContext)
                 auto src_var = src.GetSourceVariable<MLIL_VAR>();
                 function->CreateUserVariable(dest, function->GetVariableType(src_var), function->GetVariableName(src_var));
             }
-            catch(...) {}
+            catch(...) {
+                LogError("0x%llx: Could not propagate type for instruction", insn.address);
+            }
 
             updated = true;
         }
