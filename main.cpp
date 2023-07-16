@@ -98,8 +98,10 @@ void DePacMLIL(Ref<AnalysisContext> analysisContext)
 
             // Apply the type if possible.
             try {
-                auto src_var = src.GetSourceVariable<MLIL_VAR>();
-                function->CreateUserVariable(dest, function->GetVariableType(src_var), function->GetVariableName(src_var));
+                if (src.operation == MLIL_VAR) {
+                    auto src_var = src.GetSourceVariable<MLIL_VAR>();
+                    function->CreateAutoVariable(dest, function->GetVariableType(src_var), function->GetVariableName(src_var));
+                }
             }
             catch(const std::exception &e) {
                 LogError("0x%llx: Could not propagate type for instruction: %s", insn.address, e.what());
