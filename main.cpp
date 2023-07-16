@@ -2,6 +2,7 @@
 #include "binaryninjaapi.h"
 #include "mediumlevelilinstruction.h"
 #include <algorithm>
+#include <map>
 
 using namespace BinaryNinja;
 
@@ -12,6 +13,30 @@ std::set<std::string> pac_instructions;
 
 void DePacMLIL(Ref<AnalysisContext> analysisContext)
 {
+    Ref<Function> func = analysisContext->GetFunction();
+
+    if (!func) {
+        LogError("Could not get function object.");
+    }
+
+    if(func->IsAnalysisSkipped()) {
+        const std::map<BNAnalysisSkipReason,const char*> skip_reasons {
+            { NoSkipReason, "no reason" },
+            { AlwaysSkipReason, "always skipped" },
+            { ExceedFunctionSizeSkipReason, "exceeds 'analysis.limits.maxFunctionSize'" },
+		    { ExceedFunctionAnalysisTimeSkipReason, "exceeds 'analysis.limits.maxFunctionAnalysisTime'" },
+            { NewAutoFunctionAnalysisSuppressedReason, "Auto Function Analysis Suppression is enabled (analysis.suppressNewAutoFunctionAnalysis)" },
+            { BasicAnalysisSkipReason, "basic analysis skipped" },
+            { IntermediateAnalysisSkipReason, "intermediate analysis skipped" },
+        };
+        auto it  = skip_reasons.find(func->GetAnalysisSkipReason());
+        const char* reason = it == skip_reasons.end() ? "invalid reason" : it->second;
+
+        LogWarn("Analysis was skipped for function 0x%llx: %s", func->GetStart(), reason);
+        return;
+    }
+
+
     Ref<MediumLevelILFunction> mlil = analysisContext->GetMediumLevelILFunction();
 
     if (!mlil) {
