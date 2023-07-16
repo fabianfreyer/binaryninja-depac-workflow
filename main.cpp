@@ -93,7 +93,7 @@ void DePacMLIL(Ref<AnalysisContext> analysisContext)
             }
             auto src = params[0];
 
-            LogInfo("0x%llx: Replacing intrinsic %s", insn.address, intrinsic.c_str());
+            LogDebug("0x%llx: Replacing intrinsic %s", insn.address, intrinsic.c_str());
             insn.Replace(mlil->SetVar(8, dest, src.CopyTo(mlil)));
 
             // Apply the type if possible.
@@ -101,8 +101,8 @@ void DePacMLIL(Ref<AnalysisContext> analysisContext)
                 auto src_var = src.GetSourceVariable<MLIL_VAR>();
                 function->CreateUserVariable(dest, function->GetVariableType(src_var), function->GetVariableName(src_var));
             }
-            catch(...) {
-                LogError("0x%llx: Could not propagate type for instruction", insn.address);
+            catch(const std::exception &e) {
+                LogError("0x%llx: Could not propagate type for instruction: %s", insn.address, e.what());
             }
 
             updated = true;
