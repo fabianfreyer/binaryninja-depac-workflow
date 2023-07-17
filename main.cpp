@@ -7,6 +7,7 @@
 #include <thread>
 
 using namespace BinaryNinja;
+constexpr auto PluginLoggerName = "Plugin.De-PAC";
 
 extern "C" {
 BN_DECLARE_CORE_ABI_VERSION;
@@ -15,10 +16,12 @@ std::set<std::string> pac_instructions;
 
 void DePacMLIL(Ref<AnalysisContext> analysisContext)
 {
+    const auto log = BinaryNinja::LogRegistry::GetLogger(PluginLoggerName);
+
     Ref<Function> func = analysisContext->GetFunction();
 
     if (!func) {
-        LogError("Could not get function object.");
+        log->LogError("Could not get function object.");
     }
 
     if(func->IsAnalysisSkipped()) {
@@ -34,7 +37,7 @@ void DePacMLIL(Ref<AnalysisContext> analysisContext)
         auto it  = skip_reasons.find(func->GetAnalysisSkipReason());
         const char* reason = it == skip_reasons.end() ? "invalid reason" : it->second;
 
-        LogWarn("Analysis was skipped for function 0x%llx: %s", func->GetStart(), reason);
+        log->LogWarn("Analysis was skipped for function 0x%llx: %s", func->GetStart(), reason);
         return;
     }
 
@@ -42,28 +45,28 @@ void DePacMLIL(Ref<AnalysisContext> analysisContext)
     Ref<MediumLevelILFunction> mlil = analysisContext->GetMediumLevelILFunction();
 
     if (!mlil) {
-        LogError("Could not get mlil function.");
+        log->LogError("Could not get mlil function.");
         return;
     }
 
     Ref<Function> function = mlil->GetFunction();
 
     if (!function) {
-        LogError("Could not get core function for mlil function at 0x%llx", mlil->GetCurrentAddress());
+        log->LogError("Could not get core function for mlil function at 0x%llx", mlil->GetCurrentAddress());
         return;
     }
 
     Ref<BinaryView> bv = analysisContext->GetFunction()->GetView();
 
     if (!bv) {
-        LogError("Could not get binary view for mlil function at 0x%llx", mlil->GetCurrentAddress());
+        log->LogError("Could not get binary view for mlil function at 0x%llx", mlil->GetCurrentAddress());
         return;
     }
 
     Ref<Architecture> arch = mlil->GetArchitecture();
 
     if (!arch) {
-        LogError("Could not get arch for mlil function at 0x%llx", mlil->GetCurrentAddress());
+        log->LogError("Could not get arch for mlil function at 0x%llx", mlil->GetCurrentAddress());
         return;
     }
 
@@ -83,19 +86,19 @@ void DePacMLIL(Ref<AnalysisContext> analysisContext)
 
             auto outputs = insn.GetOutputVariables();
             if (outputs.size() < 1) {
-                LogError("0x%llx: Intrinsic %s did not have enough outputs", insn.address, intrinsic.c_str());
+                log->LogError("0x%llx: Intrinsic %s did not have enough outputs", insn.address, intrinsic.c_str());
                 continue;
             }
             Variable dest = outputs[0];
 
             auto params = insn.GetParameterExprs();
             if (params.size() < 1) {
-                LogError("0x%llx: Intrinsic %s did not have enough params", insn.address, intrinsic.c_str());
+                log->LogError("0x%llx: Intrinsic %s did not have enough params", insn.address, intrinsic.c_str());
                 continue;
             }
             auto src = params[0];
 
-            LogDebug("0x%llx: Replacing intrinsic %s", insn.address, intrinsic.c_str());
+            log->LogDebug("0x%llx: Replacing intrinsic %s", insn.address, intrinsic.c_str());
             insn.Replace(mlil->SetVar(8, dest, src.CopyTo(mlil)));
 
             // Apply the type if possible.
@@ -106,7 +109,7 @@ void DePacMLIL(Ref<AnalysisContext> analysisContext)
                 }
             }
             catch(const std::exception &e) {
-                LogError("0x%llx: Could not propagate type for instruction: %s", insn.address, e.what());
+                log->LogError("0x%llx: Could not propagate type for instruction: %s", insn.address, e.what());
             }
 
             updated = true;
@@ -131,12 +134,14 @@ bool WorkflowIsRegistered(const std::string& name) {
 }
 
 void RegisterWorkflow(const std::string& name, const std::string& parent, const std::string& before) {
+    const auto log = BinaryNinja::LogRegistry::GetLogger(PluginLoggerName);
+
     long long backoff = 10;
     while (!WorkflowIsRegistered(parent)) {
         std::this_thread::sleep_for(std::chrono::milliseconds(backoff));
         backoff = backoff * 2;
         if (backoff > 10000) {
-            LogError("Parent workflow %s not found", parent.c_str());
+            log->LogError("Parent workflow %s not found", parent.c_str());
             return;
         }
     }
@@ -155,11 +160,15 @@ void RegisterWorkflow(const std::string& name, const std::string& parent, const 
             "capabilities": []
         })#");
 
-        LogInfo("Registered Workflow: %s", name.c_str());
+        log->LogInfo("Registered Workflow: %s", name.c_str());
 }
 
 BINARYNINJAPLUGIN bool CorePluginInit()
 {
+    BinaryNinja::LogRegistry::CreateLogger(PluginLoggerName);
+
+    const auto log = BinaryNinja::LogRegistry::GetLogger(PluginLoggerName);
+
     pac_instructions.insert("__pacia");
     pac_instructions.insert("__paciza");
     pac_instructions.insert("__pacia1718");
@@ -208,7 +217,7 @@ BINARYNINJAPLUGIN bool CorePluginInit()
     });
     register_objc.detach();
 
-    LogInfo("DePac loaded successfully (%s-%s/%s)",
+    log->LogInfo("DePac loaded successfully (%s-%s/%s)",
         GitBranch, GitCommit, BuildType);
 
     return true;
