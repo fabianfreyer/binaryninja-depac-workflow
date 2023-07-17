@@ -115,6 +115,23 @@ void DePacMLIL(Ref<AnalysisContext> analysisContext)
         mlil->GenerateSSAForm();
 }
 
+void RegisterWorkflow(const std::string& name, const std::string& parent, const std::string& before) {
+    Ref<Workflow> myWorkflow = Workflow::Instance(parent)->Clone(name);
+
+    myWorkflow->RegisterActivity(
+        new Activity("extension.depac", DePacMLIL));
+
+    myWorkflow->Insert(before, "extension.depac");
+
+    Workflow::RegisterWorkflow(myWorkflow,
+        R"#({
+			"title": "De-PAC Workflow",
+			"description": "Removes PAC intrinsics",
+			"capabilities": []
+		})#");
+
+}
+
 BINARYNINJAPLUGIN bool CorePluginInit()
 {
     pac_instructions.insert("__pacia");
@@ -149,20 +166,15 @@ BINARYNINJAPLUGIN bool CorePluginInit()
     pac_instructions.insert("__xpacd");
     pac_instructions.insert("__xpaclri");
 
-    Ref<Workflow> myWorkflow = Workflow::Instance()->Clone("DePacWorkflow");
+    RegisterWorkflow(
+        "extension.depac.defaultAnalysis",
+        "core.function.defaultAnalysis",
+        "core.function.analyzeTailCalls");
 
-    myWorkflow->RegisterActivity(
-        new Activity("extension.DePacWorkflow", DePacMLIL));
-
-    myWorkflow->Insert("core.function.analyzeTailCalls",
-        "extension.DePacWorkflow");
-
-    Workflow::RegisterWorkflow(myWorkflow,
-        R"#({
-			"title": "DePAC Workflow",
-			"description": "Removes PAC intrinsics",
-			"capabilities": []
-		})#");
+    RegisterWorkflow(
+        "extension.depac.objectiveC",
+        "core.function.objectiveC",
+        "core.function.analyzeTailCalls");
 
     LogInfo("DePac loaded successfully (%s-%s/%s)",
         GitBranch, GitCommit, BuildType);
