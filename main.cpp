@@ -3,6 +3,8 @@
 #include "mediumlevelilinstruction.h"
 #include <algorithm>
 #include <map>
+#include <chrono>
+#include <thread>
 
 using namespace BinaryNinja;
 
@@ -115,7 +117,30 @@ void DePacMLIL(Ref<AnalysisContext> analysisContext)
         mlil->GenerateSSAForm();
 }
 
+bool WorkflowIsRegistered(const std::string& name) {
+    std::vector<Ref<Workflow>> workflows = Workflow::GetList();
+    auto it = std::find_if(workflows.begin(), workflows.end(), [name](Ref<Workflow> workflow) {
+        return workflow->GetName() == name;
+    });
+
+    if (it == workflows.end()) {
+        return false;
+    }
+
+    return true;
+}
+
 void RegisterWorkflow(const std::string& name, const std::string& parent, const std::string& before) {
+    long long backoff = 10;
+    while (!WorkflowIsRegistered(parent)) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(backoff));
+        backoff = backoff * 2;
+        if (backoff > 10000) {
+            LogError("Parent workflow %s not found", parent.c_str());
+            return;
+        }
+    }
+
     Ref<Workflow> myWorkflow = Workflow::Instance(parent)->Clone(name);
 
     myWorkflow->RegisterActivity(
@@ -125,11 +150,12 @@ void RegisterWorkflow(const std::string& name, const std::string& parent, const 
 
     Workflow::RegisterWorkflow(myWorkflow,
         R"#({
-			"title": "De-PAC Workflow",
-			"description": "Removes PAC intrinsics",
-			"capabilities": []
-		})#");
+            "title": "De-PAC Workflow",
+            "description": "Removes PAC intrinsics",
+            "capabilities": []
+        })#");
 
+        LogInfo("Registered Workflow: %s", name.c_str());
 }
 
 BINARYNINJAPLUGIN bool CorePluginInit()
@@ -166,15 +192,21 @@ BINARYNINJAPLUGIN bool CorePluginInit()
     pac_instructions.insert("__xpacd");
     pac_instructions.insert("__xpaclri");
 
-    RegisterWorkflow(
-        "extension.depac.defaultAnalysis",
-        "core.function.defaultAnalysis",
-        "core.function.analyzeTailCalls");
+    std::thread register_default([]() {
+        RegisterWorkflow(
+            "extension.depac.defaultAnalysis",
+            "core.function.defaultAnalysis",
+            "core.function.analyzeTailCalls");
+    });
+    register_default.detach();
 
-    RegisterWorkflow(
-        "extension.depac.objectiveC",
-        "core.function.objectiveC",
-        "core.function.analyzeTailCalls");
+    std::thread register_objc([](){
+        RegisterWorkflow(
+            "extension.depac.objectiveC",
+            "core.function.objectiveC",
+            "core.function.analyzeTailCalls");
+    });
+    register_objc.detach();
 
     LogInfo("DePac loaded successfully (%s-%s/%s)",
         GitBranch, GitCommit, BuildType);
